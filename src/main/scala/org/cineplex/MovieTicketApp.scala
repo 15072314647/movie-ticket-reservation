@@ -1,6 +1,6 @@
 package org.cineplex
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Props}
 import akka.event.Logging
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives._
@@ -8,10 +8,9 @@ import akka.http.scaladsl.server.Route
 import akka.pattern.CircuitBreaker
 import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
-import org.cineplex.datasource._
+import org.cineplex.actors._
 import org.cineplex.routing.RoutingPlan
 import org.cineplex.service.ReservationService
-
 import scala.concurrent.duration._
 import scala.io.StdIn
 import scala.util.Failure
@@ -31,11 +30,6 @@ object MovieTicketApp extends App {
 
   val httpConfig = config.getConfig("http")
 
-  val imbdSource = new IMDBDemo()
-  val screenInfo = new ScreeningDemo()
-  val reservation = new ReservationDemo()
-  val reservationService = new ReservationService(imbdSource, reservation, screenInfo)
-
   /** adding CircuitBreaker to regulate external work load */
   val breaker = new CircuitBreaker(system.scheduler,
     maxFailures = 5,
@@ -43,7 +37,12 @@ object MovieTicketApp extends App {
     resetTimeout = 1.second
   )
 
-  val routings = new RoutingPlan(reservationService, breaker)
+  val routings = new RoutingPlan(
+            service = new ReservationService(
+                          imdbSource = system.actorOf(Props[IMDBActor],"imdb"),
+                          screenInfo = system.actorOf(Props[ScreeningActor],"screening"),
+                          reservationSource = system.actorOf(Props[ReservationActor],"reservation"))
+                      , breaker)
 
   val handler: Route = routings.movie ~ routings.reservation
 

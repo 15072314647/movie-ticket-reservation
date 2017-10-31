@@ -2,9 +2,6 @@ package org.cineplex
 
 import com.typesafe.config.ConfigFactory
 
-import org.cineplex.datasource.IMDB._
-import org.cineplex.datasource.Screening._
-
 /**
   * Defines all the data model used in the system.
   * Included boundary check or formation validation as part of the last line of data sanity check
@@ -13,6 +10,15 @@ package object model {
 
   //Imposing artificial limit for the seating in the system.
   val MAX_SEATING = ConfigFactory.load().getConfig("application").getInt("max-seating")
+  val IMDBID_REGEX = """tt\d{7}"""
+  val SCREENID_REGEX = """screen_\d{6}"""
+
+  type IMDBID = String
+  type ScreenID = String
+  type UserId = String
+
+  final case class MovieDetail(imdbId: IMDBID, movieTitle: String)
+
 
   final case class MovieRegistration(imdbId: IMDBID,
                                      availableSeats: Int = MAX_SEATING,

@@ -1,13 +1,20 @@
 package org.cineplex.service
 
+import akka.actor.ActorRef
 import org.cineplex.model._
-import org.cineplex.datasource._
+import org.cineplex.{domain, interpreter}
+
 import scala.concurrent._
+import cats.instances.future._
+import cats.~>
+import org.cineplex.domain.Service
+
 
 /** Provide the behavior of seat reservation by composing the data from various data source*/
-final class ReservationService(imdbSource: IMDB,
-                               reservationSource: Reservation,
-                               screenInfo: Screening) {
+final class ReservationService(imdbSource: ActorRef,
+                               screenInfo: ActorRef,
+                               reservationSource: ActorRef) {
+  private val actorRuntime: Service ~> Future = interpreter.actorInterpreter(imdbSource,screenInfo,reservationSource)
   /**
     * Asynchronously retrieve external data for Movie details and screening info,
     * once both are obtained, then insert/update the ReservationStatus in the data base
@@ -18,31 +25,7 @@ final class ReservationService(imdbSource: IMDB,
     *
     */
   def saveOrUpdate(registration: MovieRegistration)(implicit ec: ExecutionContext): Future[Boolean] = {
-
-    val movieDetailF = imdbSource.getMovieDetail(registration.imdbId)
-    val screeningDetailF = screenInfo.contains(registration.screenId)
-
-    (for {
-      movie <- movieDetailF
-      screeningScheduled <- screeningDetailF
-    } yield {
-      if (movie.isDefined && screeningScheduled) {
-        movie map { movieInfo =>
-          ReservationStatus(
-            registration.imdbId,
-            registration.screenId,
-            movieInfo.movieTitle,
-            registration.availableSeats
-          )
-        }
-      } else {
-        None
-      }
-    }).flatMap {
-      case Some(status) => reservationSource.put(status.imdbId, status.screenId, status)
-      case None => Future.successful(false)
-    }
-
+    domain.saveOrUpdate(registration).foldMap(actorRuntime)
   }
 
   /**
@@ -54,7 +37,7 @@ final class ReservationService(imdbSource: IMDB,
     *
     */
   def add(request: ReservationRequest)(implicit ec: ExecutionContext): Future[Boolean] = {
-    reservationSource.reserveSeat(request.imdbId, request.screenId)
+    domain.reserve(request).foldMap(actorRuntime)
   }
 
   /**
@@ -66,6 +49,6 @@ final class ReservationService(imdbSource: IMDB,
     *          returns Some(detail) if database does contain related information, otherwise None
     */
   def fetch(request: ReservationRequest)(implicit ec: ExecutionContext): Future[Option[ReservationStatus]] = {
-    reservationSource.get(request.imdbId, request.screenId)
+    domain.fetchStatus(request).foldMap(actorRuntime)
   }
 }

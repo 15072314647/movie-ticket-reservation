@@ -10,15 +10,19 @@ package object domain {
 
   type ServiceF[A] = Free[Service, A]
 
-  final case class GetIMDB(imdbId: IMDBID) extends Service[Option[MovieDetail]]
+  sealed trait IMDB[A] extends Service[A]
+  sealed trait Screening[A] extends Service[A]
+  sealed trait Reservation[A] extends Service[A]
 
-  final case class Contains(screenId: ScreenID) extends Service[Boolean]
+  final case class GetIMDB(imdbId: IMDBID) extends IMDB[Option[MovieDetail]]
 
-  final case class GetReservation(request: ReservationRequest) extends Service[Option[ReservationStatus]]
+  final case class Contains(screenId: ScreenID) extends Screening[Boolean]
 
-  final case class PutReservation(request: ReservationRequest, status: ReservationStatus) extends Service[Boolean]
+  final case class GetReservation(request: ReservationRequest) extends Reservation[Option[ReservationStatus]]
 
-  final case class ReserveSeat(request: ReservationRequest) extends Service[Boolean]
+  final case class PutReservation(request: ReservationRequest, status: ReservationStatus) extends Reservation[Boolean]
+
+  final case class ReserveSeat(request: ReservationRequest) extends Reservation[Boolean]
 
   import Service._
 
